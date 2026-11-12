@@ -1,0 +1,393 @@
+{
+  "_comment": "Pop!_OS 24.04 ONLY. COSMIC/Wayland and the Xorg (GNOME-on-x11) session share identical app launch data, so every app uses launch.all. Loaded once by executor.load_registry(); keys starting with '_' are comments. Adding a site/app = edit this file + the static key list in system_prompt.txt + fine-tune data. Desktop ids and binaries were checked against registry-diagnostic-cosmic.txt / -xorg.txt; anything NOT confirmed there carries an 'ASSUMPTION:' note.",
+
+  "defaults": {
+    "media_service": "youtube_music"
+  },
+
+  "browser": {
+    "_comment": "Brave MUST run on a dedicated profile for CDP (Chromium blocks remote debugging on the default user-data-dir). Log into WhatsApp/YouTube/etc. once in this profile. window_class_hint is best-effort X11 only (wmctrl, verified installed); no effect on COSMIC/Wayland.",
+    "binaries": ["brave-browser"],
+    "cdp_port": 9222,
+    "user_data_dir": "~/.config/brave-cdp-profile",
+    "extra_flags": ["--no-first-run", "--no-default-browser-check"],
+    "window_class_hint": "brave-browser"
+  },
+
+  "web_search": {
+    "_comment": "Brave Search because we're already on Brave. Swap for SearXNG later: http://192.168.x.x:8080/search?q={q}",
+    "url": "https://search.brave.com/search?q={q}"
+  },
+
+  "window": {
+    "_comment": "Backs the `window` verb: act on the CURRENTLY FOCUSED window. ops.<op> = { aliases[], done, x11[[cmd...]], wayland[[cmd...]] }. For the active session type the executor runs the first command whose binary exists and exits 0. Empty list = unsupported there (executor says so). VERIFIED: wmctrl is installed. NOT verified (not in diagnostics): xdotool, wtype, ydotool - install what you use. wmctrl only sees X11/XWayland windows, so it is used for the x11 session only; on COSMIC/Wayland a focused native window is invisible to it. ASSUMPTION: the wayland key combos below (Alt+F4 close, Super+M maximize-toggle) rely on a synthetic-keyboard tool being accepted by cosmic-comp. Test: sleep 3; wtype -M alt -k F4 -m alt  (with a throwaway window focused).",
+    "ops": {
+      "close": {
+        "aliases": ["close window", "close the window", "close this", "close it", "close current", "close current window", "close focused window", "quit window", "shut window", "exit window"],
+        "done": "Closed the window.",
+        "x11": [["wmctrl", "-c", ":ACTIVE:"]],
+        "wayland": [
+          ["wtype", "-M", "alt", "-k", "F4", "-m", "alt"],
+          ["ydotool", "key", "56:1", "62:1", "62:0", "56:0"]
+        ]
+      },
+      "minimize": {
+        "aliases": ["minimise", "minimize window", "minimise window", "minimize this", "minimise this", "hide window", "hide this", "shrink window"],
+        "done": "Minimized the window.",
+        "x11": [["xdotool", "getactivewindow", "windowminimize"]],
+        "wayland": []
+      },
+      "maximize": {
+        "aliases": ["maximise", "maximize window", "maximise window", "maximize this", "maximise this", "expand window", "full size", "make it bigger"],
+        "done": "Maximized the window.",
+        "x11": [["wmctrl", "-r", ":ACTIVE:", "-b", "add,maximized_vert,maximized_horz"]],
+        "wayland": [["wtype", "-M", "logo", "-k", "m", "-m", "logo"]]
+      }
+    }
+  },
+
+  "brightness": {
+    "_comment": "Backs set_brightness. {val} is replaced by '40%' (level) or '+20%'/'−20%' (delta). Session-specific list first, 'all' fallback. First command whose binary exists and exits 0 wins. Install: sudo apt install brightnessctl",
+    "wayland": [["brightnessctl", "set", "{val}"]],
+    "x11":     [["brightnessctl", "set", "{val}"]],
+    "all":     [["brightnessctl", "set", "{val}"]]
+  },
+  
+  "toggles": {
+    "_comment": "Backs the `toggle` verb. Each feature has 'on'/'off' → {wayland:[[cmd...]], x11:[[cmd...]], all:[[cmd...]]}. First command whose binary exists and exits 0 wins. Empty list = unsupported. NOTE night_light/dnd use gsettings — they work on GNOME (Xorg session); on pure COSMIC they may need a different backend. Test with diagnose-features.sh before trusting them.",
+    "bluetooth": {
+      "name": "Bluetooth",
+      "aliases": ["bluetooth", "bt", "blue tooth"],
+      "on":  { "all": [["bluetoothctl", "power", "on"]] },
+      "off": { "all": [["bluetoothctl", "power", "off"]] }
+    },
+    "wifi": {
+      "name": "Wi-Fi",
+      "aliases": ["wifi", "wi fi", "wi-fi", "wireless", "net"],
+      "on":  { "all": [["nmcli", "radio", "wifi", "on"]] },
+      "off": { "all": [["nmcli", "radio", "wifi", "off"]] }
+    },
+    "night_light": {
+      "name": "Night Light",
+      "aliases": ["night light", "nightlight", "night mode", "blue light filter", "warm light"],
+      "on":  { "all": [["gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "true"]] },
+      "off": { "all": [["gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "false"]] }
+    },
+    "dnd": {
+      "name": "Do Not Disturb",
+      "aliases": ["do not disturb", "dnd", "silence notifications", "mute notifications", "silent mode"],
+      "on":  { "all": [["gsettings", "set", "org.gnome.desktop.notifications", "show-banners", "false"]] },
+      "off": { "all": [["gsettings", "set", "org.gnome.desktop.notifications", "show-banners", "true"]] }
+    },
+    "mute": {
+      "name": "Mute",
+      "aliases": ["mute", "audio mute", "speaker mute", "sound mute"],
+      "on":  { "all": [["pactl", "set-sink-mute", "@DEFAULT_SINK@", "1"]] },
+      "off": { "all": [["pactl", "set-sink-mute", "@DEFAULT_SINK@", "0"]] }
+    }
+  },
+
+  "sites": {
+    "_comment": "url = base URL (also the tab-matching PREFIX). search = optional template with {q} (URL-encoded by Python). Omitted where no usable search URL exists.",
+    "whatsapp": {
+      "name": "WhatsApp",
+      "aliases": ["whats app", "whatsapp web", "whatsapp dot com", "wa", "whatsup"],
+      "url": "https://web.whatsapp.com"
+    },
+    "youtube": {
+      "name": "YouTube",
+      "aliases": ["you tube", "yt", "youtube dot com", "videos"],
+      "url": "https://www.youtube.com",
+      "search": "https://www.youtube.com/results?search_query={q}"
+    },
+    "youtube_music": {
+      "name": "YouTube Music",
+      "aliases": ["yt music", "ytmusic", "youtube music", "music", "you tube music"],
+      "url": "https://music.youtube.com",
+      "search": "https://music.youtube.com/search?q={q}"
+    },
+    "gmail": {
+      "name": "Gmail",
+      "aliases": ["g mail", "mail", "email", "google mail", "my email"],
+      "url": "https://mail.google.com",
+      "search": "https://mail.google.com/mail/u/0/#search/{q}"
+    },
+    "github": {
+      "name": "GitHub",
+      "aliases": ["git hub", "gh", "github dot com", "git"],
+      "url": "https://github.com",
+      "search": "https://github.com/search?q={q}&type=repositories"
+    },
+    "chatgpt": {
+      "name": "ChatGPT",
+      "aliases": ["chat gpt", "chat g p t", "chatgpt dot com", "openai", "gpt"],
+      "url": "https://chatgpt.com"
+    },
+    "claude": {
+      "name": "Claude",
+      "aliases": ["claude ai", "claude dot ai", "clawd", "anthropic"],
+      "url": "https://claude.ai"
+    },
+    "amazon": {
+      "name": "Amazon",
+      "aliases": ["amazon india", "amazon dot in", "amazon dot com", "amazon shopping"],
+      "url": "https://www.amazon.in",
+      "search": "https://www.amazon.in/s?k={q}"
+    },
+    "flipkart": {
+      "name": "Flipkart",
+      "aliases": ["flip kart", "flipcart", "flipkart dot com", "flip cart"],
+      "url": "https://www.flipkart.com",
+      "search": "https://www.flipkart.com/search?q={q}"
+    },
+    "reddit": {
+      "name": "Reddit",
+      "aliases": ["red it", "reddit dot com", "subreddit", "reddit website"],
+      "url": "https://www.reddit.com",
+      "search": "https://www.reddit.com/search/?q={q}"
+    },
+    "google_maps": {
+      "name": "Google Maps",
+      "aliases": ["maps", "map", "google map", "gmaps", "g maps"],
+      "url": "https://www.google.com/maps",
+      "search": "https://www.google.com/maps/search/{q}"
+    },
+    "google_docs": {
+      "name": "Google Docs",
+      "aliases": ["docs", "g docs", "gdocs", "google doc", "google documents"],
+      "url": "https://docs.google.com/document/u/0/"
+    },
+    "canva": {
+      "name": "Canva",
+      "aliases": ["can va", "canva dot com", "canvas", "canva design"],
+      "url": "https://www.canva.com",
+      "search": "https://www.canva.com/search?q={q}"
+    },
+    "chess": {
+      "name": "Chess",
+      "aliases": ["chess.com", "chessdotcom", "chess dot com", "chess com", "play chess"],
+      "url": "https://www.chess.com/play/online"
+    },
+    "gemini": {
+      "name": "Gemini",
+      "aliases": ["google gemini", "gemini ai", "gemini dot google dot com", "bard"],
+      "url": "https://gemini.google.com/app"
+    },
+    "deepseek": {
+      "name": "DeepSeek",
+      "aliases": ["deep seek", "deepseek chat", "deepseek ai", "deep sea"],
+      "url": "https://chat.deepseek.com"
+    },
+    "stackoverflow": {
+      "name": "Stack Overflow",
+      "aliases": ["stack overflow", "so", "stackoverflow dot com", "stack over flow"],
+      "url": "https://stackoverflow.com",
+      "search": "https://stackoverflow.com/search?q={q}"
+    }
+  },
+
+  "apps": {
+    "_comment": "launch.all.desktop = .desktop IDs tried with gtk-launch in order; launch.all.bins = binaries tried after (absolute paths allowed). kill = anchored regexes for `pkill -f` against the full command line. Unless an entry says ASSUMPTION, its ids/binaries are confirmed by the diagnostics (.desktop Exec lines confirm binaries for apps `command -v` didn't find: cosmic-store, cosmic-player, cosmic-viewer, popsicle-gtk, obs).",
+
+    "brave": {
+      "name": "Brave",
+      "aliases": ["brave browser", "browser", "the browser", "brave web browser"],
+      "browser": true,
+      "_comment": "browser:true => executor uses brave_ensure_running() (CDP flags + dedicated profile). Kill targets ONLY the CDP-profile instance (never a normal Brave): user-data-dir is expanded from ~ before launch, so the cmdline contains the literal path ending in brave-cdp-profile.",
+      "launch": { "all": { "desktop": [], "bins": ["brave-browser"] } },
+      "kill": ["user-data-dir=[^ ]*brave-cdp-profile"]
+    },
+    "vscode": {
+      "name": "VS Code",
+      "aliases": ["vs code", "visual studio code", "vscode", "v s code", "code editor"],
+      "_comment": "Desktop id com.microsoft.VSCode exists but we launch the `code` binary directly. `code` opens a new window each time (executor-side limitation).",
+      "launch": { "all": { "desktop": [], "bins": ["code"] } },
+      "kill": ["(^|/)code( |$)"]
+    },
+    "terminal": {
+      "name": "Terminal",
+      "aliases": ["the terminal", "cosmic term", "console", "shell", "command line"],
+      "launch": { "all": { "desktop": ["com.system76.CosmicTerm"], "bins": ["cosmic-term"] } },
+      "kill": ["(^|/)cosmic-term( |$)"]
+    },
+    "file_manager": {
+      "name": "Files",
+      "aliases": ["files", "file explorer", "cosmic files", "file browser", "explorer"],
+      "launch": { "all": { "desktop": ["com.system76.CosmicFiles"], "bins": ["cosmic-files"] } },
+      "kill": ["(^|/)cosmic-files( |$)"]
+    },
+    "text_editor": {
+      "name": "Text Editor",
+      "aliases": ["editor", "cosmic edit", "notepad", "text file editor"],
+      "launch": { "all": { "desktop": ["com.system76.CosmicEdit"], "bins": ["cosmic-edit"] } },
+      "kill": ["(^|/)cosmic-edit( |$)"]
+    },
+    "settings": {
+      "name": "Settings",
+      "aliases": ["system settings", "cosmic settings", "preferences", "control panel"],
+      "launch": { "all": { "desktop": ["com.system76.CosmicSettings"], "bins": ["cosmic-settings"] } },
+      "kill": ["(^|/)cosmic-settings( |$)"]
+    },
+    "task_manager": {
+      "name": "Task Manager",
+      "aliases": ["system monitor", "cosmic monitor", "activity monitor", "process manager", "resource monitor"],
+      "launch": { "all": { "desktop": ["com.system76.CosmicMonitor"], "bins": ["cosmic-monitor"] } },
+      "kill": ["(^|/)cosmic-monitor( |$)"]
+    },
+    "screenshot": {
+      "name": "Screenshot",
+      "aliases": ["screen shot", "screen capture", "screenshot tool", "cosmic screenshot", "capture screen"],
+      "launch": { "all": { "desktop": ["com.system76.CosmicScreenshot"], "bins": ["cosmic-screenshot"] } },
+      "kill": ["(^|/)cosmic-screenshot( |$)"]
+    },
+    "calculator": {
+      "name": "Calculator",
+      "aliases": ["calc", "gnome calculator", "calculator app", "the calculator"],
+      "_comment": "ASSUMPTION: installed via apt AFTER the diagnostics were taken, so not confirmed there; org.gnome.Calculator / gnome-calculator are the standard apt ids. Verify: ls /usr/share/applications/org.gnome.Calculator.desktop; command -v gnome-calculator",
+      "launch": { "all": { "desktop": ["org.gnome.Calculator"], "bins": ["gnome-calculator"] } },
+      "kill": ["(^|/)gnome-calculator( |$)"]
+    },
+    "store": {
+      "name": "COSMIC Store",
+      "aliases": ["cosmic store", "app store", "software store", "pop shop", "software center"],
+      "launch": { "all": { "desktop": ["com.system76.CosmicStore"], "bins": ["cosmic-store"] } },
+      "kill": ["(^|/)cosmic-store( |$)"]
+    },
+    "vlc": {
+      "name": "VLC",
+      "aliases": ["vlc player", "vlc media player", "v l c", "video lan"],
+      "launch": { "all": { "desktop": ["vlc"], "bins": ["vlc"] } },
+      "kill": ["(^|/)vlc( |$)"]
+    },
+    "mpv": {
+      "name": "mpv",
+      "aliases": ["m p v", "mpv player", "mpv media player"],
+      "launch": { "all": { "desktop": ["mpv"], "bins": ["mpv"] } },
+      "kill": ["(^|/)mpv( |$)"]
+    },
+    "cosmic_player": {
+      "name": "COSMIC Media Player",
+      "aliases": ["cosmic media player", "media player", "video player", "cosmic player", "cosmic video player"],
+      "launch": { "all": { "desktop": ["com.system76.CosmicPlayer"], "bins": ["cosmic-player"] } },
+      "kill": ["(^|/)cosmic-player( |$)"]
+    },
+    "cosmic_viewer": {
+      "name": "COSMIC Viewer",
+      "aliases": ["cosmic viewer", "image viewer", "photo viewer", "picture viewer", "viewer"],
+      "launch": { "all": { "desktop": ["com.system76.CosmicViewer"], "bins": ["cosmic-viewer"] } },
+      "kill": ["(^|/)cosmic-viewer( |$)"]
+    },
+    "firefox": {
+      "name": "Firefox",
+      "aliases": ["fire fox", "mozilla firefox", "mozilla", "firefox browser"],
+      "_comment": "A second launcher 'userapp-Firefox-6U15R3' (firefox-bin) also exists; the plain `firefox` id is used. Both process names are killed.",
+      "launch": { "all": { "desktop": ["firefox"], "bins": ["firefox"] } },
+      "kill": ["(^|/)firefox( |$)", "(^|/)firefox-bin( |$)"]
+    },
+    "thunderbird": {
+      "name": "Thunderbird",
+      "aliases": ["thunder bird", "mozilla thunderbird", "mail client", "email client"],
+      "launch": { "all": { "desktop": ["thunderbird"], "bins": ["thunderbird"] } },
+      "kill": ["(^|/)thunderbird( |$)"]
+    },
+    "libreoffice_writer": {
+      "name": "LibreOffice Writer",
+      "aliases": ["writer", "libreoffice writer", "word processor", "libre office writer", "word"],
+      "_comment": "libreoffice-writer.desktop runs `libreoffice --writer`; bins fallback opens the Start Center. All LibreOffice apps share one soffice.bin process, so closing one closes all. ASSUMPTION: process name soffice.bin (standard; `soffice` itself is confirmed on PATH).",
+      "launch": { "all": { "desktop": ["libreoffice-writer"], "bins": ["libreoffice"] } },
+      "kill": ["(^|/)soffice\\.bin( |$)"]
+    },
+    "libreoffice_calc": {
+      "name": "LibreOffice Calc",
+      "aliases": ["libreoffice calc", "spreadsheet", "libre office calc", "excel", "sheets"],
+      "_comment": "libreoffice-calc.desktop runs `libreoffice --calc`. Shared soffice.bin kill (see Writer). Alias 'calc' belongs to the calculator.",
+      "launch": { "all": { "desktop": ["libreoffice-calc"], "bins": ["libreoffice"] } },
+      "kill": ["(^|/)soffice\\.bin( |$)"]
+    },
+    "libreoffice_impress": {
+      "name": "LibreOffice Impress",
+      "aliases": ["impress", "libreoffice impress", "presentation", "slides", "powerpoint"],
+      "_comment": "libreoffice-impress.desktop runs `libreoffice --impress`. Shared soffice.bin kill (see Writer).",
+      "launch": { "all": { "desktop": ["libreoffice-impress"], "bins": ["libreoffice"] } },
+      "kill": ["(^|/)soffice\\.bin( |$)"]
+    },
+    "obs": {
+      "name": "OBS Studio",
+      "aliases": ["obs studio", "o b s", "screen recorder", "open broadcaster"],
+      "launch": { "all": { "desktop": ["com.obsproject.Studio"], "bins": ["obs"] } },
+      "kill": ["(^|/)obs( |$)"]
+    },
+    "popsicle": {
+      "name": "Popsicle",
+      "aliases": ["popsicle usb", "usb flasher", "iso flasher", "usb creator", "flasher"],
+      "launch": { "all": { "desktop": ["com.system76.Popsicle"], "bins": ["popsicle-gtk"] } },
+      "kill": ["(^|/)popsicle-gtk( |$)"]
+    },
+    "droidcam": {
+      "name": "DroidCam",
+      "aliases": ["droid cam", "phone camera", "phone as webcam", "android webcam"],
+      "launch": { "all": { "desktop": ["droidcam"], "bins": ["/usr/local/bin/droidcam"] } },
+      "kill": ["(^|/)droidcam( |$)"]
+    },
+    "freedownloadmanager": {
+      "name": "Free Download Manager",
+      "aliases": ["free download manager", "fdm", "download manager", "downloader"],
+      "launch": { "all": { "desktop": ["freedownloadmanager"], "bins": ["/opt/freedownloadmanager/fdm"] } },
+      "kill": ["(^|/)fdm( |$)"]
+    },
+    "cursor": {
+      "name": "Cursor",
+      "aliases": ["cursor editor", "cursor ai", "cursor ide", "cursor code editor"],
+      "launch": { "all": { "desktop": ["cursor"], "bins": ["/usr/share/cursor/cursor"] } },
+      "kill": ["(^|/)cursor( |$)"]
+    }
+  },
+
+  "media": {
+    "_comment": "search_prefix = yt-dlp search prefix (1 = top hit). watch_url = template filled with the video ID. mode 'ui' opens the result in Brave. recipe = Playwright fallback. site = sites key for the last-resort 'open the search page' fallback.",
+    "youtube": {
+      "name": "YouTube",
+      "aliases": ["you tube", "yt", "youtube video", "videos"],
+      "search_prefix": "ytsearch1:",
+      "watch_url": "https://www.youtube.com/watch?v={id}",
+      "mode": "ui",
+      "mpv_args": [],
+      "recipe": "youtube_play",
+      "site": "youtube"
+    },
+    "youtube_music": {
+      "name": "YouTube Music",
+      "aliases": ["yt music", "ytmusic", "youtube music", "music", "songs"],
+      "search_prefix": "ytsearch1:",
+      "watch_url": "https://music.youtube.com/watch?v={id}",
+      "mode": "ui",
+      "mpv_args": ["--no-video"],
+      "recipe": "youtube_music_play",
+      "site": "youtube_music"
+    }
+  },
+
+  "recipes": {
+    "_comment": "FALLBACKS ONLY: play_media resolves via yt-dlp and opens the direct watch URL, bypassing these. They run only if yt-dlp fails. CSS selectors target the current YouTube / YT Music DOM and WILL rot; fix them here, not in Python. Steps: goto ({q} URL-encoded) | wait_for (selector) | click (first match) | wait (ms); optional per-step: timeout_ms, optional:true.",
+    "youtube_music_play": {
+      "requires": ["q"],
+      "reuse_prefix": "https://music.youtube.com",
+      "steps": [
+        { "goto": "https://music.youtube.com/search?q={q}" },
+        { "wait_for": "ytmusic-responsive-list-item-renderer", "timeout_ms": 12000 },
+        { "click": "ytmusic-responsive-list-item-renderer a.yt-simple-endpoint", "timeout_ms": 8000 },
+        { "wait": 1500 }
+      ]
+    },
+    "youtube_play": {
+      "requires": ["q"],
+      "reuse_prefix": "https://www.youtube.com",
+      "steps": [
+        { "goto": "https://www.youtube.com/results?search_query={q}" },
+        { "wait_for": "ytd-video-renderer a#video-title", "timeout_ms": 12000 },
+        { "click": "ytd-video-renderer a#video-title", "timeout_ms": 8000 },
+        { "wait": 1500 }
+      ]
+    }
+  }
+}
